@@ -15,7 +15,7 @@ PROXY_TYPE_OPTION = (
     )
 
 class ProxyServer(models.Model):
-    addr = models.CharField("IP address", max_length=12)
+    addr = models.CharField("IP address", max_length=15)
     port = models.CharField("Port", max_length=4)
     proxy_type = models.CharField("Proxy types", choices=PROXY_TYPE_OPTION, max_length=10, default='HTTP')
     def __str__(self):
@@ -24,7 +24,7 @@ class ProxyServer(models.Model):
 class Resources(models.Model):
     type = models.ForeignKey("ResourceType", on_delete=models.PROTECT, help_text="select a resource type")
     name = models.CharField("Resource name", max_length=100, unique=True, help_text="the name has to be unique")
-    addr = models.CharField("IP address", max_length=12, help_text="e.g. 0.0.0.0")
+    addr = models.CharField("IP address", max_length=15, help_text="e.g. 0.0.0.0")
     port = models.CharField("Port", max_length=4)
     user_id = models.CharField("User ID", max_length=100, help_text="user id to access")
     password = models.CharField("Password", max_length=200)
