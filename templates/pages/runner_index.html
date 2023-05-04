@@ -1,0 +1,360 @@
+{% load library %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>octopus - Runner</title>
+    {% include "pages/include.html" %}
+    <script type="text/javascript">
+        const CONNECT_BUTTON_CONNECT = "Connect";
+        const CONNECT_BUTTON_DISCONNECT = "Disconnect";
+        const SHOW_HIDE_SPEED = 100;
+        const KEYCODE_ENTER = 13;
+
+        // var connected = false;
+
+        $.ajaxSetup({
+            headers: { "X-CSRFToken": '{{csrf_token}}' }
+        });
+
+        function append_command_history(str) {
+            var textarea = $("#command-history");
+            textarea.html(textarea.val() + " " + str + "\n");
+            if(textarea.length)
+                textarea.scrollTop(textarea[0].scrollHeight - textarea.height());
+        }
+
+        function ConvertSystemSourcetoHtml(str){
+            str = str.replace(/</g,"&lt;");
+            str = str.replace(/>/g,"&gt;");
+            str = str.replace(/\"/g,"&quot;");
+            str = str.replace(/\'/g,"&#39;");
+            // str = str.replace(/\n/g,"<br />");
+            return str;
+        }
+
+        function append_command_history_to_card(target_name, str) {
+            var textarea = $("#command-history-" + target_name);
+            textarea.html(textarea.val() + " " + ConvertSystemSourcetoHtml(str));
+            if(textarea.length)
+                textarea.scrollTop(textarea[0].scrollHeight - textarea.height());
+        }
+
+        function send_json_by_ajax(type, obj) {
+            $.ajax({
+                type: 'POST',
+                url: '/api/' + type,
+                data: JSON.stringify(obj),
+                contentType: "application/json; charset=utf-8",
+                traditional: true,
+                async: false,
+                success: function (data) {
+                    if (type == 'request')
+                    {
+                        append_command_history("'" + obj[0].command + "' executed");
+                        for (var key in data) {
+                            append_command_history_to_card(key, data[key]);
+                        }
+                    }
+                    else
+                    {
+                        append_command_history(type + " success");
+                    }
+                },
+                error: function (data) {
+                    append_command_history(type + " fail");
+                }
+            });
+        }
+
+        // show or hiding card of resource
+        function toggle_card(card_id) {
+            $('#' + card_id).toggle(SHOW_HIDE_SPEED);
+        }
+
+        function make_text_button_connect() {
+            var obj = $('#button_connect');
+            obj.text(CONNECT_BUTTON_CONNECT);
+            obj.addClass("btn");
+            obj.addClass("btn-primary");
+        }
+
+        // function toggle_all_checkbox() {
+        //     $("input[name='chk_resources']").prop('disabled',function(){
+        //         return !$(this).prop('disabled');
+        //     });
+        // }
+
+        function ajax_request(req) {
+            jsonObj = [];
+            request = {};
+            var str ="";
+            request["command"] = req;
+            var resources_list = $("input[name='chk_resources']:checked").each(function(){
+                str += this.value + ",";
+            });
+            request["target"] = str.slice(0,-1);
+            jsonObj.push(request);
+            // alert(JSON.stringify(jsonObj));
+
+            send_json_by_ajax("request", jsonObj);
+        }
+
+        function ajax_connect() {
+            jsonObj = [];
+            request = {};
+            var str ="";
+            var resources_list = $("input[name='chk_resources']:checked").each(function(){
+                str += this.value + ",";
+            });
+            request["target"] = str.slice(0,-1);
+            jsonObj.push(request);
+            // alert(JSON.stringify(jsonObj));
+
+            send_json_by_ajax("connect", jsonObj);
+        }
+
+        function ajax_disconnect() {
+            jsonObj = [];
+            request = {};
+            request["target"] = "all";
+            jsonObj.push(request);
+            // alert(JSON.stringify(jsonObj));
+
+            send_json_by_ajax("disconnect", jsonObj);
+        }
+
+        // function connect_or_disconnect() {
+        //     var obj = $('#button_connect');
+        //     // if (obj.text() == CONNECT_BUTTON_CONNECT)
+        //     if (connected == false)
+        //     {
+        //         toggle_all_checkbox();
+        //         ajax_connect();
+        //         obj.removeClass("btn-primary");
+        //         obj.addClass("btn-danger");
+        //         obj.text(CONNECT_BUTTON_DISCONNECT);
+        //         connected = true;
+        //     }
+        //     else
+        //     {
+        //         toggle_all_checkbox();
+        //         ajax_disconnect();
+        //         obj.removeClass("btn-danger");
+        //         obj.addClass("btn-primary");
+        //         obj.text(CONNECT_BUTTON_CONNECT);
+        //         connected = false;
+        //     }
+        // }
+
+        function send_request() {
+            var obj = $('#command');
+            if (obj.val() == "")
+            {
+                alert("Command is required");
+                obj.focus();
+                return;
+            }
+
+            if (obj.val() == "clear")
+            {
+                $('textarea[class="form-control"]').html("");
+                obj.val("");
+                return;
+            }
+
+            ajax_request(obj.val());
+            // append_command_history(obj.val());
+            obj.val("");
+            obj.focus();
+        }
+
+        function upload_file() {
+            var fileForm = $("#formFileMultiple");
+            if (fileForm.val() == "")
+            {
+                alert("Choose files");
+                return;
+            }
+            if ($("#upload-path").val() == "")
+            {
+                alert("Upload path is required");
+                $("#upload-path").focus();
+                return;
+            }
+
+            // build json
+            jsonObj = [];
+            request = {};
+            var str ="";
+            request["path"] = $("#upload-path").val();
+            var resources_list = $("input[name='chk_resources']:checked").each(function(){
+                str += this.value + ",";
+            });
+            request["target"] = str.slice(0, -1);
+            jsonObj.push(request);
+            append_command_history("Upload path: " + $("#upload-path").val());
+            
+            // build form data
+            var form_data = new FormData();
+            form_data.append("json", JSON.stringify(jsonObj))
+            append_command_history("Selected file(s)");
+            for (var i = 0; i < fileForm.get(0).files.length; ++i) {
+                form_data.append("file", fileForm.get(0).files[i]);
+                append_command_history("- " + fileForm.get(0).files[i].name);
+            }
+
+            // send json and request
+            $.ajax({
+                type: 'POST',
+                url: '/api/upload',
+                data: form_data,
+                cache: false,
+                contentType: false,
+                processData: false,
+                async: false,
+                beforeSend: function () {
+                    append_command_history("trying to upload");
+                },
+                success: function (data) {
+                    append_command_history("upload success");
+                    for (var key in data) {
+                        append_command_history_to_card(key, data[key]);
+                    }
+                },
+                error: function (data) {
+                    append_command_history("upload fail");
+                }
+            });
+        }
+
+        function onLoad() {
+            // make_text_button_connect();
+
+            // for tooltip
+            $(function () {
+                $('[data-bs-toggle="popover"]').popover();
+            })
+
+            $("#command").keydown(function(e) {
+                if (e.keyCode == KEYCODE_ENTER)
+                    send_request();
+            });
+
+            $("#upload-path").keydown(function(e) {
+                if (e.keyCode == KEYCODE_ENTER)
+                    upload_file();
+            });
+
+            $("#btn-toggle-all").click(function(){
+                $("input[name='chk_resources']").prop('checked', function(){
+                    return !$(this).prop('checked');
+                });
+                $("div[class='card']").toggle(SHOW_HIDE_SPEED);
+            });
+
+            $("#btn-select-all").click(function(){
+                $("input[name='chk_resources']").prop('checked', true);
+                $("div[class='card']").show(SHOW_HIDE_SPEED);
+            });
+
+            $("#btn-deselect-all").click(function(){
+                $("input[name='chk_resources']").prop('checked', false);
+                $("div[class='card']").hide(SHOW_HIDE_SPEED);
+            });
+
+            $("#btn-upload-file-clear").click(function(){
+                $("#upload-path").val("");
+                $("#formFileMultiple").val("");
+            });
+        }
+    </script>
+</head>
+
+<body onload="onLoad()">
+    <div class="container" style="position: relative;">
+        <!-- navigation start -->
+        {% with where_am_i="/runner" %}
+        {% include "pages/navbar.html" %}
+        {% endwith %}
+        <!-- navigation end -->
+
+        <!-- content start -->
+        <p />
+        <!-- resource list -->
+        <div class="alert bg-light">
+            <p class="fs-6">Total resources: {{resources.count}}</p>
+            <button type="button" class="btn btn-warning" id="btn-select-all">Enable all</button>
+            <button type="button" class="btn btn-secondary" id="btn-deselect-all">Disable all</button>
+            <button type="button" class="btn btn-danger" id="btn-toggle-all">Toggle</button>
+            <div class="btn-group" role="group">|</div>
+            {% for entry in resources %}
+            <input type="checkbox" class="btn-check" id="btn-check-outlined-{{entry.name}}" name="chk_resources" value="{{entry.name}}" autocomplete="off" checked onchange="toggle_card('card-{{entry.name}}')">
+            <label class="btn btn-outline-primary" for="btn-check-outlined-{{entry.name}}">{{entry.name}}</label>
+            {% endfor %}
+        </div>
+        <p />
+        <!-- connect / disconnect -->
+        <!-- <div class="alert bg-light">
+            <p class="fs-6">Connect</p>
+            <button type="button" id="button_connect" onclick="connect_or_disconnect()"></button>
+        </div>
+        <p /> -->
+        <!-- command history -->
+        <div class="alert bg-light">
+            <p class="fs-6">Command</p>
+            <div class="input-group">
+                <span class="input-group-text">History</span>
+                <textarea class="form-control" aria-label="With textarea" id="command-history" style="height: 10rem;font-size: 15px!important;" disabled></textarea>
+            </div>
+            <p />
+            <!-- file upload -->
+            <div class="input-group">
+                <input class="form-control" type="file" id="formFileMultiple" multiple aria-describedby="btn-upload-file">
+                <input type="text" class="form-control" id="upload-path" placeholder="Upload path" aria-label="Upload path" aria-describedby="btn-upload-file">
+                <button class="btn btn-outline-secondary" type="button" id="btn-upload-file" onclick="upload_file()">Upload</button>
+                <button class="btn btn-outline-secondary" type="button" id="btn-upload-file-clear">Clear</button>
+            </div>
+            <p />
+            <!-- command box -->
+            <div class="input-group">
+                <input type="text" class="form-control" id="command" placeholder="Command" aria-label="Command" aria-describedby="btn-send-request">
+                <button class="btn btn-outline-secondary" type="button" id="btn-send-request" onclick="send_request()">Send</button>
+                <button class="btn btn-secondary" type="button" data-bs-toggle="popover" data-bs-placement="left" data-bs-custom-class="custom-popover"
+                    data-bs-html="true" data-bs-title="How to use"
+                    data-bs-content="
+                        Commands
+                        <ul>
+                            <li>clear: clear all card</li>
+                            <li>upload: upload files to the servers</li>
+                        </ul>
+                        Upload files
+                        <ul>
+                            <li>Multiple files can be selected</li>
+                            <li></li>
+                        </ul>">Help</button>
+            </div>
+        </div>
+        <!-- windows -->
+        <div class="alert bg-light-subtle">
+            <div class="row column-gap-2 row-gap-2">
+            {% for entry in resources %}
+                <div class="card" style="width: 39rem;" id="card-{{entry.name}}">
+                    <div class="card-body" style="padding-left: 0%;padding-right: 0%;padding-bottom: 3%;">
+                        <h5 class="card-title">{{entry.name}}</h5>
+                        <textarea class="form-control" style="height: 12rem;font-size: 12px!important;" aria-label="With textarea" id="command-history-{{entry.name}}" disabled></textarea>
+                        <p class="card-text" style="text-align: right;"><small class="text-muted">{{entry.addr}} / {{entry.type.name}}</small></p>
+                    </div>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+        <!-- content end -->
+    </div>
+</body>
+
+</html>

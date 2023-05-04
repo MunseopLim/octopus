@@ -1,0 +1,195 @@
+{% load library %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>octopus</title>
+    {% include "pages/include.html" %}
+    <script type="text/javascript">
+        $.ajaxSetup({
+            headers: { "X-CSRFToken": '{{csrf_token}}' }
+        });
+
+        function send_command_by_ajax(api_name, obj, cb_success, cb_fail) {
+            $.ajax({
+                type: 'POST',
+                url: '/api/' + api_name,
+                data: JSON.stringify(obj),
+                contentType: "application/json; charset=utf-8",
+                traditional: true,
+                async: false,
+                success: function (data) {
+                    if (cb_success != null)
+                        cb_success(data);
+                },
+                error: function (data) {
+                    if (cb_fail != null)
+                        cb_fail(data);
+                }
+            });
+        }
+
+        function display_modal_contents(head, contents) {
+            $("#modalDisplayLabel").html(head);
+            $("#modelDisplay-body").html("<pre>" + contents + "</pre>");
+        }
+
+        function build_json(command, message, target) {
+            jsonObj = [];
+            request = {};
+            request["command"] = command;
+            request["message"] = message;
+            request["target"] = target;
+            jsonObj.push(request);
+            return jsonObj;
+        }
+
+        function model_success(data) {
+            contents = "";
+            if (data["result"] == "")
+                contents = "success";
+            else
+                contents = data["result"];
+            display_modal_contents(data["message"], contents);
+        }
+
+        function modal_fail(data) {
+            display_modal_contents("Failed", "Failed");
+        }
+
+        window.onload = function(){
+            // button - remove resource
+            $('button[id^="remove-"]').click(function(){
+                var answer = confirm("Remove " + $(this).attr('name') + " from the page?");
+                if (answer == true)
+                {
+                    build_json("disabled_resource", "disabled_resource", $(this).attr('name'));
+                    send_command_by_ajax("disabled_resource", jsonObj, function(){location.reload();}, function(){alert("Failed");});
+                }
+            });
+            // button - reboot
+            $('button[id^="btn-reboot"]').click(function(){
+                var answer = confirm("Reboot " + $(this).attr('name') + "?");
+                if (answer == false)
+                    return;
+                jsonObj = build_json("reboot", "Reboot " + $(this).attr('name'), $(this).attr('name'));
+                send_command_by_ajax("reboot", jsonObj, model_success, modal_fail);
+            });
+            // button - routing table
+            $('button[id^="btn-routing"]').click(function(){
+                jsonObj = build_json("route", "Routing table of " + $(this).attr('name'), $(this).attr('name'));
+                send_command_by_ajax("command", jsonObj, model_success, modal_fail);
+            });
+            // button - df
+            $('button[id^="btn-df"]').click(function(){
+                jsonObj = build_json("df -h", "The result of " + $(this).attr('name'), $(this).attr('name'));
+                send_command_by_ajax("command", jsonObj, model_success, modal_fail);
+            });
+            // button - run ntpd
+            $('button[id^="btn-ntpd"]').click(function(){
+                jsonObj = build_json("systemctl start ntp", "The result of " + $(this).attr('name'), $(this).attr('name'));
+                send_command_by_ajax("command", jsonObj, model_success, modal_fail);
+            });
+            // button - ci
+            $('button[id^="btn-ci"]').click(function(){
+                jsonObj = build_json($(this).attr("command"), "The result of " + $(this).attr('name'), $(this).attr('name'));
+                send_command_by_ajax("command", jsonObj, model_success, modal_fail);
+            });
+        };
+    </script>
+</head>
+
+<body>
+    <div class="container" style="position: relative;">
+        <!-- navigation start -->
+        {% with where_am_i="/" %}
+        {% include "pages/navbar.html" %}
+        {% endwith %}
+        <!-- navigation end -->
+
+        <!-- Vertically centered scrollable modal -->
+        <div class="modal fade" id="modalDisplay" tabindex="-1" aria-labelledby="modalDisplayLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h1 class="modal-title fs-5" id="modalDisplayLabel">Modal title</h1>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="modelDisplay-body">Modal contents</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <!-- <button type="button" class="btn btn-primary">Save changes</button> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <blockquote class="blockquote text-muted">
+            <p class="mb-0" style="text-align: end;">Total resources: {{resources.count}}</p>
+        </blockquote>
+
+        <!-- content start -->
+        <div class="alert bg-light">
+            <table class="table table-hover table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Address</th>
+                        <!-- <th scope="col">Connected</th> -->
+                        <th scope="col">info</th>
+                        <th scope="col" style="width: 8rem;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in resources %}
+                    {% with dic=more_info|select_by_name:entry.name %}
+                    <tr>
+                        <th scope="row">{{forloop.counter}}</th>
+                        <td>{{entry.type.name}}</td>
+                        <td>{{entry.name}} <button type="button" class="btn-close" aria-label="Close" id="remove-{{entry.name}}" name="{{entry.name}}"></button></td>
+                        <td>{{entry.addr}}</td>
+                        <!-- <td>
+                            {% if dic|select_by_name:"connectivity" == "OK" %}
+                            <button type="button" class="btn btn-primary btn-sm">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</button>
+                            {% else %}
+                            <button type="button" class="btn btn-danger btn-sm">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</button>
+                            {% endif %}
+                        </td> -->
+                        <td>
+                            <!-- view all info once -->
+                            <ul>
+                                {% for k, v in dic.items %}
+                                <li class="text-sm-start {{v|display_danger_color_if_contains_fail}}">[{{v}}] {{k}}</li>
+                                {% endfor %}
+                            </ul>
+                            <!-- view only button to see -->
+                            <!-- <button type="button" class="btn btn-primary btn-info">more</button> -->
+                        </td>
+                        <td>
+                            <div class="row row-gap-sm-1 align-content-center" style="width: 100%;">
+                                <button type="button" style="width: 100%;" class="btn btn-danger btn-sm" id="btn-reboot-{{entry.name}}" name="{{entry.name}}" data-bs-toggle="modal" data-bs-target="#modalDisplay">REBOOT</button>
+                                <button type="button" style="width: 100%;" class="btn btn-primary btn-sm" id="btn-routing-{{entry.name}}" name="{{entry.name}}" data-bs-toggle="modal" data-bs-target="#modalDisplay">show route</button>
+                                <button type="button" style="width: 100%;" class="btn btn-primary btn-sm" id="btn-df-{{entry.name}}" name="{{entry.name}}" data-bs-toggle="modal" data-bs-target="#modalDisplay">disk free</button>
+                                <!-- <button type="button" style="width: 100%;" class="btn btn-primary btn-sm" id="btn-ntpd-{{entry.name}}" name="{{entry.name}}" data-bs-toggle="modal" data-bs-target="#modalDisplay">run ntpd</button> -->
+                                {% if entry.ci_agent_path %}
+                                <button type="button" style="width: 100%;" class="btn btn-primary btn-sm" id="btn-ci-{{entry.name}}" name="{{entry.name}}" command="{{entry.ci_agent_path}}" data-bs-toggle="modal" data-bs-target="#modalDisplay">ci agent</button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- content end -->
+    </div>
+</body>
+
+</html>

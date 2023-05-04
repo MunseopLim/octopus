@@ -1,0 +1,171 @@
+{% load library %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>octopus - Test</title>
+    {% include "pages/include.html" %}
+    <script type="text/javascript">
+        const SHOW_HIDE_SPEED = 100;
+        const SCRIPT ="sudo passwd root\
+input passwd\
+input 1st root passwd\
+input 2nd root passwd\
+su\
+input root passwd\
+echo 'user_id ALL=(ALL:ALL) ALL' | sudo EDITOR='tee -a' visudo\
+echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config\
+systemctl restart sshd";
+
+        $.ajaxSetup({
+            headers: { "X-CSRFToken": '{{csrf_token}}' }
+        });
+
+        function send_command_by_ajax(api_name, obj, cb_success, cb_fail) {
+            $.ajax({
+                type: 'POST',
+                url: '/api/' + api_name,
+                data: JSON.stringify(obj),
+                contentType: "application/json; charset=utf-8",
+                traditional: true,
+                async: false,
+                success: function (data) {
+                    if (cb_success != null)
+                        cb_success(data);
+                },
+                error: function (data) {
+                    if (cb_fail != null)
+                        cb_fail(data);
+                }
+            });
+        }
+
+        function display_modal_contents(head, contents) {
+            $("#modalDisplayLabel").html(head);
+            $("#modelDisplay-body").html("<pre>" + contents + "</pre>");
+        }
+
+        function build_json(command, message, target) {
+            jsonObj = [];
+            request = {};
+            request["command"] = command;
+            request["message"] = message;
+            request["target"] = target;
+            jsonObj.push(request);
+            return jsonObj;
+        }
+
+        function model_success(data) {
+            contents = "";
+            if (data["result"] == "")
+                contents = "success";
+            else
+                contents = data["result"];
+            display_modal_contents(data["message"], contents);
+        }
+
+        function modal_fail(data) {
+            display_modal_contents("Failed", "Failed");
+        }
+
+        window.onload = function(){
+            $("#btn-toggle-all").click(function(){
+                $("input[name='chk_resources']").prop('checked', function(){
+                    return !$(this).prop('checked');
+                });
+                $("div[class='card']").toggle(SHOW_HIDE_SPEED);
+            });
+
+            $("#btn-select-all").click(function(){
+                $("input[name='chk_resources']").prop('checked', true);
+                $("div[class='card']").show(SHOW_HIDE_SPEED);
+            });
+
+            $("#btn-deselect-all").click(function(){
+                $("input[name='chk_resources']").prop('checked', false);
+                $("div[class='card']").hide(SHOW_HIDE_SPEED);
+            });
+
+            $("#textarea-script").html(SCRIPT);
+        };
+    </script>
+</head>
+
+<body>
+    <div class="container" style="position: relative;">
+        <!-- navigation start -->
+        {% with where_am_i="/tester" %}
+        {% include "pages/navbar.html" %}
+        {% endwith %}
+        <!-- navigation end -->
+
+        <!-- Vertically centered scrollable modal -->
+        <div class="modal fade" id="modalDisplay" tabindex="-1" aria-labelledby="modalDisplayLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h1 class="modal-title fs-5" id="modalDisplayLabel">Modal title</h1>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="modelDisplay-body">Modal contents</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <!-- <button type="button" class="btn btn-primary">Save changes</button> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- content start -->
+        <p />
+        <!-- resource list -->
+        <div class="alert bg-light">
+            <p class="fs-6">Total resources: {{resources.count}}</p>
+            <button type="button" class="btn btn-warning" id="btn-select-all">Enable all</button>
+            <button type="button" class="btn btn-secondary" id="btn-deselect-all">Disable all</button>
+            <button type="button" class="btn btn-danger" id="btn-toggle-all">Toggle</button>
+            <div class="btn-group" role="group">|</div>
+            {% for entry in resources %}
+            <input type="checkbox" class="btn-check" id="btn-check-outlined-{{entry.name}}" name="chk_resources" value="{{entry.name}}" autocomplete="off" checked onchange="toggle_card('card-{{entry.name}}')">
+            <label class="btn btn-outline-primary" for="btn-check-outlined-{{entry.name}}">{{entry.name}}</label>
+            {% endfor %}
+        </div>
+
+        <div class="alert bg-light">
+            <p class="fs-6">Set ROOT password and Enable SSH ROOT login?</p>
+            <form class="row g-3">
+                <div class="col-md-4">
+                    <label for="inputEmail4" class="form-label">ID: to access</label>
+                    <input type="text" class="form-control" id="input-user-id">
+                </div>
+                <div class="col-md-2">
+                    <label for="inputPassword4" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="input-password">
+                </div>
+                <div class="col-md-4">
+                    <label for="inputEmail4" class="form-label">ID: root</label>
+                    <input type="text" class="form-control" id="input-root" value="root" disabled>
+                </div>
+                <div class="col-md-2">
+                    <label for="inputPassword4" class="form-label">root passwd</label>
+                    <input type="password" class="form-control" id="input-root-password">
+                </div>
+                <div class="col-12">
+                    <label for="inputAddress" class="form-label">Script</label>
+                    <textarea class="form-control" style="height: 12rem;font-size: 12px!important;" aria-label="With textarea" id="textarea-script" disabled></textarea>
+                </div>
+                <div class="col-12">
+                  <button type="button" class="btn btn-primary">Run</button>
+                </div>
+              </form>
+        </div>
+
+        <!-- content end -->
+    </div>
+</body>
+
+</html>
