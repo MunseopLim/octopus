@@ -3,6 +3,7 @@ from django.forms.models import model_to_dict
 from tester.built_in_test_stage import built_in_test_stage
 import threading
 
+
 class test_thread(threading.Thread):
     def __init__(self, result_dict, target, test_stage_queryset):
         super().__init__()
@@ -39,7 +40,9 @@ class test_thread(threading.Thread):
         return "None"
 
     def get_result_of_test_stage(self, test_stage_dict):
-        result = self.run_command_get_result(test_stage_dict["test_command"]).strip(' \n')
+        result = self.run_command_get_result(test_stage_dict["test_command"]).strip(
+            " \n"
+        )
         # print("[runner.test_thread.get_result_of_test_stage] result: " + result)
         return self.make_result_message(result, test_stage_dict)
 
@@ -53,7 +56,9 @@ class test_thread(threading.Thread):
             return
         for entry in self.test_stage_queryset:
             single_test_stage = model_to_dict(entry)
-            result[single_test_stage["name"]] = self.get_result_of_test_stage(single_test_stage)
+            result[single_test_stage["name"]] = self.get_result_of_test_stage(
+                single_test_stage
+            )
 
         built_in = built_in_test_stage(self.target, result)
         built_in.run()
