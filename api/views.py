@@ -16,7 +16,7 @@ def request(request):
         jsonObj = json.loads(request.body)[0]
         print(
             "[api.views.request] sig: "
-            + request.session._session_key
+            + str(request.session._session_key)
             + ", command: "
             + jsonObj["command"]
             + ", target: "

@@ -12,7 +12,7 @@ class thread_task:
     def __init__(self, sig, command_str, server_name_list, files=None):
         print(
             "[api.thread_task.__init__] sig: "
-            + sig
+            + str(sig)
             + ", command_str: "
             + command_str
             + ", server_name_list: "
